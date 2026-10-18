@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag（例如 v0.1.0）'
+        required: true
 
 permissions:
   contents: write
@@ -25,6 +29,8 @@ jobs:
             goarch: arm64
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: actions/setup-go@v5
         with:
@@ -68,3 +74,4 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
