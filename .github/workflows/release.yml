@@ -1,13 +1,10 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
-      tag:
-        description: '要发布的 tag（例如 v0.1.0）'
+      version:
+        description: '版本号（例如 v0.1.0）'
         required: true
 
 permissions:
@@ -29,8 +26,6 @@ jobs:
             goarch: arm64
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: actions/setup-go@v5
         with:
@@ -72,6 +67,8 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.version }}
+          name: ${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
           files: dist/*
           generate_release_notes: true
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
