@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号（例如 v0.4.0）'
+        description: '版本号（例如 v0.4.0，不带 v 也行）'
         required: true
 
 permissions:
@@ -32,11 +32,12 @@ jobs:
           go-version: '1.23'
           cache: true
 
-      - name: Normalize version
+      - name: Resolve version
+        id: ver
         run: |
           V="${{ inputs.version }}"
           if [[ "$V" != v* ]]; then V="v$V"; fi
-          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
 
       - name: Resolve dependencies
         run: go mod tidy
@@ -46,6 +47,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: '0'
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
@@ -65,6 +67,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve version
+        id: ver
+        run: |
+          V="${{ inputs.version }}"
+          if [[ "$V" != v* ]]; then V="v$V"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -75,8 +84,8 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.VERSION }}
-          name: ${{ env.VERSION }}
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: ${{ steps.ver.outputs.version }}
           target_commitish: ${{ github.sha }}
           files: dist/*
           generate_release_notes: true
