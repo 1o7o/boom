@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号（例如 v0.1.0）'
+        description: '版本号（例如 v0.4.0）'
         required: true
 
 permissions:
@@ -32,6 +32,12 @@ jobs:
           go-version: '1.23'
           cache: true
 
+      - name: Normalize version
+        run: |
+          V="${{ inputs.version }}"
+          if [[ "$V" != v* ]]; then V="v$V"; fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
       - name: Resolve dependencies
         run: go mod tidy
 
@@ -44,7 +50,9 @@ jobs:
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
           mkdir -p dist
-          go build -trimpath -ldflags="-s -w" -o "dist/boom_${GOOS}_${GOARCH}${EXT}" .
+          go build -trimpath \
+            -ldflags="-s -w -X main.appVersion=${VERSION}" \
+            -o "dist/boom_${GOOS}_${GOARCH}${EXT}" .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -67,8 +75,8 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.version }}
-          name: ${{ inputs.version }}
+          tag_name: ${{ env.VERSION }}
+          name: ${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
           files: dist/*
           generate_release_notes: true
