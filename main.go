@@ -17,7 +17,7 @@ import (
 	gprocess "github.com/shirou/gopsutil/v4/process"
 )
 
-const appVersion = "v0.3.2"
+var appVersion = "dev"
 
 const (
 	stList = iota
@@ -74,6 +74,8 @@ const (
 	resultTicks    = 55
 )
 
+const exitHint = "再按下 ESC 即可退出"
+
 type PortInfo struct {
 	Port int
 	PID  int32
@@ -103,6 +105,7 @@ type model struct {
 	killPending   bool
 	inContainer   bool
 	unsafeMode    bool
+	escPending    bool
 }
 
 // ================= main / CLI =================
@@ -440,6 +443,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result = msg.result
 		m.killPending = false
 		m.frame = 0
+		m.escPending = false
 		return m, tick()
 
 	case tea.KeyMsg:
@@ -482,11 +486,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// 列表状态下，任何非 Esc 按键都取消“双击退出”待定状态
+		if m.state == stList && msg.String() != "esc" && m.escPending {
+			m.escPending = false
+			if m.notice == exitHint {
+				m.notice = ""
+			}
+		}
+
 		switch m.state {
 		case stList:
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "ctrl+c":
 				return m, tea.Quit
+			case "q":
+				return m, tea.Quit
+			case "esc":
+				if m.escPending {
+					return m, tea.Quit
+				}
+				m.escPending = true
+				m.notice = exitHint
+				return m, nil
 			case "up", "k":
 				if m.cursor > 0 {
 					m.cursor--
@@ -530,6 +551,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = stLocked
 				m.frame = 0
 				m.notice = ""
+				m.escPending = false
 				return m, tick()
 			}
 
@@ -541,9 +563,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter", "y", "Y":
 				m.state = stFlying
 				m.frame = 0
+				m.escPending = false
 				return m, tick()
 			case "n", "N", "c", "C", "esc", "q", "0":
 				m.state = stList
+				m.escPending = false
 				m.notice = "已取消锁定"
 				return m, nil
 			}
@@ -578,6 +602,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.frame = 0
 				m.killPending = true
 				m.result = "发射中..."
+				m.escPending = false
 				return m, killCmd(m.target.PID)
 			}
 			return m, tick()
@@ -676,7 +701,7 @@ func (m model) View() string {
 	var hint string
 	switch m.state {
 	case stList:
-		hint = " ↑/↓ 选择  Enter 锁定  / 搜索  r 刷新  a 全部  s 皮肤  q 退出 "
+		hint = " ↑/↓ 选择  Enter 锁定  / 搜索  r 刷新  a 全部  s 皮肤  Esc×2 退出  q 退出 "
 	case stLocked:
 		hint = " Enter/Y 发射   N/C/Esc/Q/0 取消锁定 "
 	case stResult:
@@ -846,7 +871,13 @@ func (m model) View() string {
 
 	if m.state == stResult {
 		msg := ">>> " + m.result + " <<<"
-		c.text((w-len(msg))/2, h/2, msg, styleResult)
+		msgW := lipgloss.Width(msg)
+		x := (w - msgW) / 2
+		if x < 1 {
+			x = 1
+		}
+		c.text(x, h/2-1, msg, styleResult)
+
 		var hint2 string
 		if m.killPending {
 			hint2 = "处刑中..."
@@ -857,7 +888,12 @@ func (m model) View() string {
 			}
 			hint2 = fmt.Sprintf("Enter 返回  q 退出  (%d 秒后自动返回)", remain)
 		}
-		c.text((w-len(hint2))/2, h/2+2, hint2, styleHint)
+		hintW := lipgloss.Width(hint2)
+		hx := (w - hintW) / 2
+		if hx < 1 {
+			hx = 1
+		}
+		c.text(hx, h/2+1, hint2, styleHint)
 	}
 
 	return c.render()
